@@ -1,121 +1,47 @@
-import 'package:flutter/material.dart';
-import '../db.dart';
-import '../models.dart';
-import 'juego_screen.dart';
-import 'maquinas_screen.dart';
+# Cuchillas — control visual de desgaste
 
-class JuegosScreen extends StatefulWidget {
-  const JuegosScreen({super.key});
+App Android 100% offline para comparar fotos de cuchillas en el tiempo.
+Los datos y fotos viven solo en el teléfono (SQLite + almacenamiento interno).
 
-  @override
-  State<JuegosScreen> createState() => _JuegosScreenState();
-}
+## Cómo obtener el APK (vía recomendada: GitHub Actions)
 
-class _JuegosScreenState extends State<JuegosScreen> {
-  List<Juego> _juegos = [];
+Solo necesitas una cuenta gratuita de GitHub. La nube compila; la app nunca la necesita.
 
-  @override
-  void initState() {
-    super.initState();
-    _cargar();
-  }
+1. Entra a github.com y crea una cuenta gratis (si no tienes).
+2. Crea un repositorio nuevo: botón **New**, nombre `cuchillas`, **Private**, botón **Create repository**.
+3. En el repositorio: **Add file → Upload files**. Arrastra TODO el contenido de esta carpeta (incluida la carpeta `.github`; si no la ves, activa "ver archivos ocultos"). Botón **Commit changes**.
+4. Pestaña **Actions** → verás "Compilar APK" ejecutándose (~5-8 min).
+5. Al terminar en verde, entra a la ejecución → sección **Artifacts** → descarga `cuchillas-apk`.
+6. Descomprime el ZIP, pasa `app-release.apk` al teléfono (cable o Quick Share).
+7. En el teléfono, toca el APK → acepta "instalar apps de origen desconocido" → instalar.
 
-  Future<void> _cargar() async {
-    final juegos = await DB.instance.getJuegos();
-    if (mounted) setState(() => _juegos = juegos);
-  }
+Para futuras versiones: subes los archivos modificados al repositorio y repites los pasos 4-6.
 
-  Future<void> _nuevoJuego() async {
-    final ctrl = TextEditingController();
-    final nombre = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Nuevo juego de cuchillas'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          decoration: const InputDecoration(
-            labelText: 'Número o nombre del juego',
-            hintText: 'Ej: Juego 07',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-            child: const Text('Crear'),
-          ),
-        ],
-      ),
-    );
-    if (nombre == null || nombre.isEmpty) return;
-    await DB.instance.insertJuego(nombre);
-    _cargar();
-  }
+## Alternativa: compilar en tu PC
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Juegos de cuchillas'),
-        actions: [
-          IconButton(
-            tooltip: 'Máquinas',
-            iconSize: 30,
-            icon: const Icon(Icons.precision_manufacturing),
-            onPressed: () async {
-              await Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const MaquinasScreen()));
-            },
-          ),
-        ],
-      ),
-      body: _juegos.isEmpty
-          ? const Center(
-              child: Padding(
-                padding: EdgeInsets.all(32),
-                child: Text(
-                  'Sin juegos todavía.\nCrea el primero con el botón +',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 20),
-                ),
-              ),
-            )
-          : ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: _juegos.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
-              itemBuilder: (ctx, i) {
-                final j = _juegos[i];
-                return Card(
-                  child: ListTile(
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                    leading: const Icon(Icons.hardware, size: 36),
-                    title: Text(j.nombre,
-                        style: const TextStyle(
-                            fontSize: 22, fontWeight: FontWeight.w600)),
-                    subtitle: Text('Alta: ${j.fechaAlta}'),
-                    trailing: const Icon(Icons.chevron_right, size: 32),
-                    onTap: () async {
-                      await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => JuegoScreen(juego: j)));
-                      _cargar();
-                    },
-                  ),
-                );
-              },
-            ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _nuevoJuego,
-        icon: const Icon(Icons.add, size: 30),
-        label: const Text('Nuevo juego', style: TextStyle(fontSize: 20)),
-      ),
-    );
-  }
-}
+1. Instala Flutter: https://docs.flutter.dev/get-started/install/windows (incluye Android Studio).
+2. En esta carpeta:
+   ```
+   flutter create . --platforms android --project-name cuchillas
+   flutter pub get
+   flutter build apk --release
+   ```
+3. El APK queda en `build/app/outputs/flutter-apk/app-release.apk`.
+
+Con el teléfono conectado por USB (depuración USB activada), `flutter run` instala directo.
+
+## Estructura
+
+- `lib/main.dart` — arranque y tema (botones grandes, alto contraste)
+- `lib/db.dart` — base de datos SQLite local
+- `lib/models.dart` — máquinas, juegos, cuchillas, revisiones
+- `lib/screens/juegos_screen.dart` — P1 lista de juegos
+- `lib/screens/juego_screen.dart` — P1 detalle: 4 cuchillas
+- `lib/screens/camera_screen.dart` — P2 cámara con guía fantasma
+- `lib/screens/registro_screen.dart` — P3 registro (fecha, máquina, llapada, material)
+- `lib/screens/comparacion_screen.dart` — P4 comparación con superposición
+- `lib/screens/maquinas_screen.dart` — gestión de máquinas
+
+## Permisos
+
+Solo cámara (lo agrega automáticamente el plugin). Sin internet, sin cuentas, sin suscripciones.
