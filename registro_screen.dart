@@ -1,217 +1,166 @@
 import 'dart:io';
-import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
+import '../db.dart';
 import '../models.dart';
-import 'registro_screen.dart';
+import 'camera_screen.dart';
+import 'comparacion_screen.dart';
 
-/// P2: cámara con guía fantasma (la foto de referencia superpuesta
-/// semitransparente para repetir el encuadre).
-class CameraScreen extends StatefulWidget {
-  final Cuchilla cuchilla;
-  final String? rutaReferencia;
-  const CameraScreen({super.key, required this.cuchilla, this.rutaReferencia});
+class JuegoScreen extends StatefulWidget {
+  final Juego juego;
+  const JuegoScreen({super.key, required this.juego});
 
   @override
-  State<CameraScreen> createState() => _CameraScreenState();
+  State<JuegoScreen> createState() => _JuegoScreenState();
 }
 
-class _CameraScreenState extends State<CameraScreen> {
-  CameraController? _ctrl;
-  double _opacidadGuia = 0.4;
-  bool _linterna = false;
-  bool _capturando = false;
-  String? _error;
+class _JuegoScreenState extends State<JuegoScreen> {
+  List<Cuchilla> _cuchillas = [];
+  final Map<int, Revision?> _ultimas = {};
 
   @override
   void initState() {
     super.initState();
-    _init();
+    _cargar();
   }
 
-  Future<void> _init() async {
-    try {
-      final camaras = await availableCameras();
-      final trasera = camaras.firstWhere(
-        (c) => c.lensDirection == CameraLensDirection.back,
-        orElse: () => camaras.first,
-      );
-      final ctrl = CameraController(trasera, ResolutionPreset.high,
-          enableAudio: false);
-      await ctrl.initialize();
-      if (mounted) setState(() => _ctrl = ctrl);
-    } catch (e) {
-      if (mounted) setState(() => _error = 'No se pudo abrir la cámara: $e');
+  Future<void> _cargar() async {
+    final cuchillas = await DB.instance.getCuchillas(widget.juego.id!);
+    for (final c in cuchillas) {
+      _ultimas[c.id!] = await DB.instance.getUltimaRevision(c.id!);
     }
+    if (mounted) setState(() => _cuchillas = cuchillas);
   }
 
-  Future<void> _toggleLinterna() async {
-    if (_ctrl == null) return;
-    _linterna = !_linterna;
-    await _ctrl!
-        .setFlashMode(_linterna ? FlashMode.torch : FlashMode.off);
-    setState(() {});
+  Future<void> _nuevaFoto(Cuchilla c) async {
+    final revisiones = await DB.instance.getRevisiones(c.id!);
+    final referencia = revisiones.isEmpty ? null : revisiones.first.rutaFoto;
+    if (!mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CameraScreen(cuchilla: c, rutaReferencia: referencia),
+      ),
+    );
+    _cargar();
   }
 
-  Future<void> _capturar() async {
-    if (_ctrl == null || _capturando) return;
-    setState(() => _capturando = true);
-    try {
-      final foto = await _ctrl!.takePicture();
-      final docs = await getApplicationDocumentsDirectory();
-      final dirFotos = Directory(p.join(docs.path, 'fotos'));
-      if (!dirFotos.existsSync()) dirFotos.createSync(recursive: true);
-      final destino = p.join(dirFotos.path,
-          'c${widget.cuchilla.id}_${DateTime.now().millisecondsSinceEpoch}.jpg');
-      await File(foto.path).copy(destino);
+  Future<void> _comparar(Cuchilla c) async {
+    final revisiones = await DB.instance.getRevisiones(c.id!);
+    if (revisiones.isEmpty) {
       if (!mounted) return;
-      // Apagar linterna antes de salir de la cámara.
-      if (_linterna) await _ctrl!.setFlashMode(FlashMode.off);
-      if (!mounted) return;
-      await Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => RegistroScreen(
-            cuchilla: widget.cuchilla,
-            rutaFoto: destino,
-            esPrimeraFoto: widget.rutaReferencia == null,
-          ),
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _capturando = false);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Esta cuchilla aún no tiene fotos',
+              style: TextStyle(fontSize: 18))));
+      return;
     }
+    if (!mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => ComparacionScreen(cuchilla: c)),
+    );
+    _cargar();
   }
 
-  @override
-  void dispose() {
-    _ctrl?.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_error != null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Cámara')),
-        body: Center(
-            child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(_error!, style: const TextStyle(fontSize: 18)))),
-      );
-    }
-    if (_ctrl == null || !_ctrl!.value.isInitialized) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-    final tieneGuia = widget.rutaReferencia != null;
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: Row(
-                children: [
-                  IconButton(
-                    iconSize: 32,
-                    color: Colors.white,
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                  Expanded(
-                    child: Text(
-                      'Cuchilla ${widget.cuchilla.numero}'
-                      '${tieneGuia ? ' · encuadra con la guía' : ' · primera foto'}',
-                      style:
-                          const TextStyle(color: Colors.white, fontSize: 18),
+  void _opciones(Cuchilla c) {
+    final ultima = _ultimas[c.id!];
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Cuchilla ${c.numero}',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      fontSize: 24, fontWeight: FontWeight.w600)),
+              if (c.material != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text('Material: ${c.material}',
                       textAlign: TextAlign.center,
-                    ),
-                  ),
-                  IconButton(
-                    iconSize: 32,
-                    color: _linterna ? Colors.amber : Colors.white,
-                    icon: Icon(
-                        _linterna ? Icons.flashlight_on : Icons.flashlight_off),
-                    onPressed: _toggleLinterna,
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  CameraPreview(_ctrl!),
-                  if (tieneGuia)
-                    IgnorePointer(
-                      child: Opacity(
-                        opacity: _opacidadGuia,
-                        child: Image.file(File(widget.rutaReferencia!),
-                            fit: BoxFit.contain),
-                      ),
-                    )
-                  else
-                    IgnorePointer(
-                      child: CustomPaint(painter: _Reticula()),
-                    ),
-                ],
-              ),
-            ),
-            if (tieneGuia)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Row(
-                  children: [
-                    const Icon(Icons.opacity, color: Colors.white70, size: 26),
-                    Expanded(
-                      child: Slider(
-                        value: _opacidadGuia,
-                        min: 0,
-                        max: 0.9,
-                        onChanged: (v) => setState(() => _opacidadGuia = v),
-                      ),
-                    ),
-                  ],
+                      style: const TextStyle(fontSize: 16)),
                 ),
+              const SizedBox(height: 20),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.photo_camera, size: 30),
+                label: const Text('Nueva revisión'),
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _nuevaFoto(c);
+                },
               ),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16, top: 4),
-              child: GestureDetector(
-                onTap: _capturar,
-                child: Container(
-                  width: 84,
-                  height: 84,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: _capturando ? Colors.grey : Colors.white,
-                    border: Border.all(color: Colors.white30, width: 6),
-                  ),
-                  child: const Icon(Icons.photo_camera,
-                      color: Colors.black, size: 40),
-                ),
+              const SizedBox(height: 12),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.compare, size: 30),
+                label: Text(ultima == null
+                    ? 'Comparar (sin fotos)'
+                    : 'Comparar (${ultima.orden} fotos)'),
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _comparar(c);
+                },
               ),
-            ),
-          ],
+              const SizedBox(height: 12),
+            ],
+          ),
         ),
       ),
     );
   }
-}
 
-class _Reticula extends CustomPainter {
   @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.white38
-      ..strokeWidth = 1;
-    canvas.drawLine(Offset(size.width / 2, 0),
-        Offset(size.width / 2, size.height), paint);
-    canvas.drawLine(Offset(0, size.height / 2),
-        Offset(size.width, size.height / 2), paint);
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(widget.juego.nombre)),
+      body: GridView.count(
+        crossAxisCount: 2,
+        padding: const EdgeInsets.all(16),
+        mainAxisSpacing: 16,
+        crossAxisSpacing: 16,
+        children: _cuchillas.map((c) {
+          final ultima = _ultimas[c.id!];
+          return Card(
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () => _opciones(c),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: ultima == null
+                        ? Container(
+                            color: Colors.black26,
+                            child: const Icon(Icons.photo_camera_outlined,
+                                size: 48, color: Colors.white38),
+                          )
+                        : Image.file(File(ultima.rutaFoto), fit: BoxFit.cover),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(10),
+                    child: Column(
+                      children: [
+                        Text('Cuchilla ${c.numero}',
+                            style: const TextStyle(
+                                fontSize: 20, fontWeight: FontWeight.w600)),
+                        Text(
+                          ultima == null
+                              ? 'Sin fotos'
+                              : '${ultima.fecha} · Rev. ${ultima.orden}',
+                          style: const TextStyle(
+                              fontSize: 14, color: Colors.white70),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
   }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

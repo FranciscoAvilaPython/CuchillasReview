@@ -1,36 +1,38 @@
-name: Compilar APK
+import 'package:flutter/material.dart';
+import 'screens/juegos_screen.dart';
 
-on:
-  push:
-    branches: [main]
-  workflow_dispatch:
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const CuchillasApp());
+}
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+class CuchillasApp extends StatelessWidget {
+  const CuchillasApp({super.key});
 
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-
-      - name: Generar proyecto Android
-        run: flutter create . --platforms android --project-name cuchillas
-
-      - name: Dependencias
-        run: flutter pub get
-
-      - name: Compilar APK
-        run: flutter build apk --release
-
-      - name: Publicar APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: cuchillas-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Cuchillas',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        brightness: Brightness.dark,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.amber,
+          brightness: Brightness.dark,
+        ),
+        // Botones grandes: uso con guantes y poca luz.
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            minimumSize: const Size(88, 60),
+            textStyle: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+          ),
+        ),
+        textTheme: const TextTheme(
+          bodyMedium: TextStyle(fontSize: 18),
+          titleLarge: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
+        ),
+      ),
+      home: const JuegosScreen(),
+    );
+  }
+}
