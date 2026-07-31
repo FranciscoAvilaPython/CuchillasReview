@@ -1,9 +1,13 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import '../db.dart';
 import '../models.dart';
 import 'camera_screen.dart';
 import 'comparacion_screen.dart';
+import 'registro_screen.dart';
 
 class JuegoScreen extends StatefulWidget {
   final Juego juego;
@@ -61,6 +65,57 @@ class _JuegoScreenState extends State<JuegoScreen> {
     _cargar();
   }
 
+  Future<void> _subirGaleria(Cuchilla c) async {
+    final img = await ImagePicker().pickImage(source: ImageSource.gallery);
+    if (img == null) return;
+    final docs = await getApplicationDocumentsDirectory();
+    final dirFotos = Directory(p.join(docs.path, 'fotos'));
+    if (!dirFotos.existsSync()) dirFotos.createSync(recursive: true);
+    final destino = p.join(dirFotos.path,
+        'c${c.id}_${DateTime.now().millisecondsSinceEpoch}.jpg');
+    await File(img.path).copy(destino);
+    final revisiones = await DB.instance.getRevisiones(c.id!);
+    if (!mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => RegistroScreen(
+          cuchilla: c,
+          rutaFoto: destino,
+          esPrimeraFoto: revisiones.isEmpty,
+        ),
+      ),
+    );
+    _cargar();
+  }
+
+  Future<void> _editarMaterial(Cuchilla c) async {
+    final ctrl = TextEditingController(text: c.material ?? '');
+    final material = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Material · Cuchilla ${c.numero}'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration:
+              const InputDecoration(hintText: 'Ej: acero antidesgaste'),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+              child: const Text('Guardar')),
+        ],
+      ),
+    );
+    if (material == null) return;
+    await DB.instance.setMaterial(c.id!, material);
+    _cargar();
+  }
+
   void _opciones(Cuchilla c) {
     final ultima = _ultimas[c.id!];
     showModalBottomSheet(
@@ -86,10 +141,19 @@ class _JuegoScreenState extends State<JuegoScreen> {
               const SizedBox(height: 20),
               ElevatedButton.icon(
                 icon: const Icon(Icons.photo_camera, size: 30),
-                label: const Text('Nueva revisión'),
+                label: const Text('Nueva revisión (cámara)'),
                 onPressed: () {
                   Navigator.pop(ctx);
                   _nuevaFoto(c);
+                },
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.photo_library, size: 30),
+                label: const Text('Subir desde galería'),
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _subirGaleria(c);
                 },
               ),
               const SizedBox(height: 12),
@@ -101,6 +165,18 @@ class _JuegoScreenState extends State<JuegoScreen> {
                 onPressed: () {
                   Navigator.pop(ctx);
                   _comparar(c);
+                },
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(88, 52),
+                    textStyle: const TextStyle(fontSize: 18)),
+                icon: const Icon(Icons.edit, size: 26),
+                label: const Text('Editar material'),
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _editarMaterial(c);
                 },
               ),
               const SizedBox(height: 12),

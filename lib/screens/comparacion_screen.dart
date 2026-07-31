@@ -1,5 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import '../db.dart';
 import '../models.dart';
 
@@ -80,6 +83,157 @@ class _ComparacionScreenState extends State<ComparacionScreen> {
     );
   }
 
+  Future<void> _recargar() async {
+    final revisiones = await DB.instance.getRevisiones(widget.cuchilla.id!);
+    if (!mounted) return;
+    if (revisiones.isEmpty) {
+      Navigator.pop(context);
+      return;
+    }
+    setState(() {
+      _revisiones = revisiones;
+      if (_indice >= revisiones.length) _indice = revisiones.length - 1;
+      _aplicarAlineacion();
+    });
+  }
+
+  DateTime _parseFecha(String f) {
+    final partes = f.split('-');
+    if (partes.length == 3) {
+      final d = int.tryParse(partes[0]);
+      final m = int.tryParse(partes[1]);
+      final a = int.tryParse(partes[2]);
+      if (d != null && m != null && a != null) return DateTime(a, m, d);
+    }
+    return DateTime.now();
+  }
+
+  Future<void> _editarDatos() async {
+    final r = _revisiones[_indice];
+    final maquinas = await DB.instance.getMaquinas();
+    if (!mounted) return;
+    var fecha = _parseFecha(r.fecha);
+    int? maquinaId = r.maquinaId;
+    var llapada = r.llapada;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          title: Text('Editar Rev. ${r.orden}'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              OutlinedButton.icon(
+                icon: const Icon(Icons.calendar_month),
+                label: Text(fmtFecha(fecha)),
+                onPressed: () async {
+                  final f = await showDatePicker(
+                    context: ctx,
+                    initialDate: fecha,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime.now(),
+                  );
+                  if (f != null) setD(() => fecha = f);
+                },
+              ),
+              const SizedBox(height: 12),
+              const Text('Máquina'),
+              Wrap(
+                spacing: 8,
+                children: maquinas
+                    .map((m) => ChoiceChip(
+                          label: Text(m.nombre),
+                          selected: maquinaId == m.id,
+                          onSelected: (_) => setD(() => maquinaId = m.id),
+                        ))
+                    .toList(),
+              ),
+              const SizedBox(height: 12),
+              const Text('¿Llapada?'),
+              Wrap(
+                spacing: 8,
+                children: [
+                  ChoiceChip(
+                    label: const Text('Sí'),
+                    selected: llapada,
+                    onSelected: (_) => setD(() => llapada = true),
+                  ),
+                  ChoiceChip(
+                    label: const Text('No'),
+                    selected: !llapada,
+                    onSelected: (_) => setD(() => llapada = false),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancelar')),
+            FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Guardar')),
+          ],
+        ),
+      ),
+    );
+    if (ok != true) return;
+    await DB.instance.updateRevision(r.id!,
+        fecha: fmtFecha(fecha), llapada: llapada, maquinaId: maquinaId);
+    _recargar();
+  }
+
+  Future<void> _reemplazarFoto() async {
+    final r = _revisiones[_indice];
+    final img = await ImagePicker().pickImage(source: ImageSource.gallery);
+    if (img == null) return;
+    final docs = await getApplicationDocumentsDirectory();
+    final dirFotos = Directory(p.join(docs.path, 'fotos'));
+    if (!dirFotos.existsSync()) dirFotos.createSync(recursive: true);
+    final destino = p.join(dirFotos.path,
+        'c${widget.cuchilla.id}_${DateTime.now().millisecondsSinceEpoch}.jpg');
+    await File(img.path).copy(destino);
+    await DB.instance.updateRevisionFoto(r.id!, destino);
+    try {
+      final viejo = File(r.rutaFoto);
+      if (viejo.existsSync()) viejo.deleteSync();
+    } catch (_) {}
+    _recargar();
+  }
+
+  Future<void> _eliminarRevision() async {
+    final r = _revisiones[_indice];
+    final esRef = r.orden == 1;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('¿Eliminar Rev. ${r.orden}?'),
+        content: Text(esRef
+            ? 'Es la foto de REFERENCIA. Si la eliminas, la siguiente foto pasará a ser la nueva referencia.'
+            : 'La foto se borrará definitivamente.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      final f = File(r.rutaFoto);
+      if (f.existsSync()) f.deleteSync();
+    } catch (_) {}
+    await DB.instance.deleteRevision(r.id!);
+    _recargar();
+  }
+
   void _resetAlineacion() {
     setState(() {
       _dx = 0;
@@ -114,6 +268,30 @@ class _ComparacionScreenState extends State<ComparacionScreen> {
             iconSize: 28,
             icon: const Icon(Icons.restart_alt),
             onPressed: _resetAlineacion,
+          ),
+          PopupMenuButton<String>(
+            iconSize: 28,
+            onSelected: (v) {
+              if (v == 'editar') _editarDatos();
+              if (v == 'foto') _reemplazarFoto();
+              if (v == 'eliminar') _eliminarRevision();
+            },
+            itemBuilder: (ctx) => const [
+              PopupMenuItem(
+                value: 'editar',
+                child: Text('Editar datos', style: TextStyle(fontSize: 18)),
+              ),
+              PopupMenuItem(
+                value: 'foto',
+                child: Text('Reemplazar foto (galería)',
+                    style: TextStyle(fontSize: 18)),
+              ),
+              PopupMenuItem(
+                value: 'eliminar',
+                child: Text('Eliminar revisión',
+                    style: TextStyle(fontSize: 18, color: Colors.red)),
+              ),
+            ],
           ),
         ],
       ),
