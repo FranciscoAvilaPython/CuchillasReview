@@ -139,6 +139,66 @@ class DB {
     });
   }
 
+  Future<void> renameJuego(int id, String nombre) async {
+    final db = await database;
+    await db.update('juegos', {'nombre': nombre},
+        where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// Elimina el juego, sus cuchillas y revisiones.
+  /// Devuelve las rutas de fotos para borrar los archivos.
+  Future<List<String>> deleteJuego(int id) async {
+    final db = await database;
+    final cuchillas =
+        await db.query('cuchillas', where: 'juego_id = ?', whereArgs: [id]);
+    final rutas = <String>[];
+    for (final c in cuchillas) {
+      final revs = await db.query('revisiones',
+          where: 'cuchilla_id = ?', whereArgs: [c['id']]);
+      rutas.addAll(revs.map((r) => r['ruta_foto'] as String));
+      await db.delete('revisiones',
+          where: 'cuchilla_id = ?', whereArgs: [c['id']]);
+    }
+    await db.delete('cuchillas', where: 'juego_id = ?', whereArgs: [id]);
+    await db.delete('juegos', where: 'id = ?', whereArgs: [id]);
+    return rutas;
+  }
+
+  Future<void> updateRevision(int id,
+      {required String fecha,
+      required bool llapada,
+      int? maquinaId}) async {
+    final db = await database;
+    await db.update(
+        'revisiones',
+        {'fecha': fecha, 'llapada': llapada ? 1 : 0, 'maquina_id': maquinaId},
+        where: 'id = ?',
+        whereArgs: [id]);
+  }
+
+  Future<void> updateRevisionFoto(int id, String ruta) async {
+    final db = await database;
+    await db.update('revisiones', {'ruta_foto': ruta},
+        where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// Elimina una revisión y renumera el orden de las restantes.
+  Future<void> deleteRevision(int id) async {
+    final db = await database;
+    final fila =
+        await db.query('revisiones', where: 'id = ?', whereArgs: [id]);
+    if (fila.isEmpty) return;
+    final cuchillaId = fila.first['cuchilla_id'] as int;
+    await db.delete('revisiones', where: 'id = ?', whereArgs: [id]);
+    final restantes = await db.query('revisiones',
+        where: 'cuchilla_id = ?', whereArgs: [cuchillaId], orderBy: 'orden');
+    var n = 1;
+    for (final r in restantes) {
+      await db.update('revisiones', {'orden': n++},
+          where: 'id = ?', whereArgs: [r['id']]);
+    }
+  }
+
   Future<void> guardarAlineacion(
       int revisionId, double dx, double dy, double escala, double rotacion) async {
     final db = await database;
