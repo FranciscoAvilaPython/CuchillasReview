@@ -23,12 +23,9 @@ jobs:
       - name: Descargar fuente D-DIN
         run: |
           mkdir -p fonts
-          curl -sL -o ddin.zip https://raw.githubusercontent.com/amcchord/datto-d-din/master/D-DIN-ttf.zip \
-            || curl -sL -o ddin.zip https://raw.githubusercontent.com/amcchord/datto-d-din/main/D-DIN-ttf.zip
-          unzip -o ddin.zip -d ddin_extract
-          cp "$(find ddin_extract -name 'D-DIN.ttf' | head -1)" fonts/D-DIN.ttf
-          cp "$(find ddin_extract -name 'D-DIN-Bold.ttf' | head -1)" fonts/D-DIN-Bold.ttf
-          ls -la fonts/
+          curl -fsSL -o fonts/D-DIN.ttf https://raw.githubusercontent.com/amcchord/datto-d-din/main/D-DIN.ttf
+          curl -fsSL -o fonts/D-DIN-Bold.ttf https://raw.githubusercontent.com/amcchord/datto-d-din/main/D-DIN-Bold.ttf
+          file fonts/D-DIN.ttf fonts/D-DIN-Bold.ttf
 
       - name: Firma fija (actualizaciones sin desinstalar)
         run: |
