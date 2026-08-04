@@ -10,8 +10,15 @@ class DB {
   Future<Database> get database async {
     if (_db != null) return _db!;
     final ruta = join(await getDatabasesPath(), 'cuchillas.db');
-    _db = await openDatabase(ruta, version: 1, onCreate: _onCreate);
+    _db = await openDatabase(ruta,
+        version: 2, onCreate: _onCreate, onUpgrade: _onUpgrade);
     return _db!;
+  }
+
+  Future<void> _onUpgrade(Database db, int oldV, int newV) async {
+    if (oldV < 2) {
+      await db.execute('ALTER TABLE revisiones ADD COLUMN turnos INTEGER');
+    }
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -43,6 +50,7 @@ class DB {
         llapada INTEGER NOT NULL DEFAULT 0,
         maquina_id INTEGER REFERENCES maquinas(id),
         orden INTEGER NOT NULL,
+        turnos INTEGER,
         dx REAL NOT NULL DEFAULT 0,
         dy REAL NOT NULL DEFAULT 0,
         escala REAL NOT NULL DEFAULT 1,
@@ -62,6 +70,20 @@ class DB {
   Future<int> insertMaquina(String nombre) async {
     final db = await database;
     return db.insert('maquinas', {'nombre': nombre});
+  }
+
+  Future<void> updateMaquina(int id, String nombre) async {
+    final db = await database;
+    await db.update('maquinas', {'nombre': nombre},
+        where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// Elimina la máquina; las revisiones que la usaban quedan sin máquina.
+  Future<void> deleteMaquina(int id) async {
+    final db = await database;
+    await db.update('revisiones', {'maquina_id': null},
+        where: 'maquina_id = ?', whereArgs: [id]);
+    await db.delete('maquinas', where: 'id = ?', whereArgs: [id]);
   }
 
   // ---- Juegos ----
@@ -123,6 +145,7 @@ class DB {
     required String fecha,
     required bool llapada,
     int? maquinaId,
+    int? turnos,
   }) async {
     final db = await database;
     final r = await db.rawQuery(
@@ -136,7 +159,38 @@ class DB {
       'llapada': llapada ? 1 : 0,
       'maquina_id': maquinaId,
       'orden': orden,
+      'turnos': turnos,
     });
+  }
+
+  /// Todas las revisiones con juego, cuchilla y máquina (para la galería).
+  Future<List<Map<String, dynamic>>> getRevisionesDetalle(
+      {int? juegoId, int? numero}) async {
+    final db = await database;
+    final where = <String>[];
+    final args = <Object>[];
+    if (juegoId != null) {
+      where.add('j.id = ?');
+      args.add(juegoId);
+    }
+    if (numero != null) {
+      where.add('c.numero = ?');
+      args.add(numero);
+    }
+    final sql = '''
+      SELECT r.id, r.cuchilla_id, r.ruta_foto, r.fecha, r.llapada,
+             r.maquina_id, r.orden, r.turnos,
+             c.numero AS cuchilla_numero,
+             j.id AS juego_id, j.nombre AS juego_nombre,
+             m.nombre AS maquina_nombre
+      FROM revisiones r
+      JOIN cuchillas c ON r.cuchilla_id = c.id
+      JOIN juegos j ON c.juego_id = j.id
+      LEFT JOIN maquinas m ON r.maquina_id = m.id
+      ${where.isEmpty ? '' : 'WHERE ${where.join(' AND ')}'}
+      ORDER BY j.id DESC, c.numero, r.orden
+    ''';
+    return db.rawQuery(sql, args);
   }
 
   Future<void> renameJuego(int id, String nombre) async {
@@ -167,11 +221,17 @@ class DB {
   Future<void> updateRevision(int id,
       {required String fecha,
       required bool llapada,
-      int? maquinaId}) async {
+      int? maquinaId,
+      int? turnos}) async {
     final db = await database;
     await db.update(
         'revisiones',
-        {'fecha': fecha, 'llapada': llapada ? 1 : 0, 'maquina_id': maquinaId},
+        {
+          'fecha': fecha,
+          'llapada': llapada ? 1 : 0,
+          'maquina_id': maquinaId,
+          'turnos': turnos,
+        },
         where: 'id = ?',
         whereArgs: [id]);
   }

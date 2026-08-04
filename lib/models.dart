@@ -50,6 +50,7 @@ class Revision {
   final bool llapada;
   final int? maquinaId;
   final int orden;
+  final int? turnos;
   final double dx, dy, escala, rotacion;
   Revision({
     this.id,
@@ -59,6 +60,7 @@ class Revision {
     required this.llapada,
     this.maquinaId,
     required this.orden,
+    this.turnos,
     this.dx = 0,
     this.dy = 0,
     this.escala = 1,
@@ -73,6 +75,7 @@ class Revision {
         'llapada': llapada ? 1 : 0,
         'maquina_id': maquinaId,
         'orden': orden,
+        'turnos': turnos,
         'dx': dx,
         'dy': dy,
         'escala': escala,
@@ -86,6 +89,7 @@ class Revision {
         llapada: (m['llapada'] as int) == 1,
         maquinaId: m['maquina_id'] as int?,
         orden: m['orden'] as int,
+        turnos: m['turnos'] as int?,
         dx: (m['dx'] as num).toDouble(),
         dy: (m['dy'] as num).toDouble(),
         escala: (m['escala'] as num).toDouble(),
