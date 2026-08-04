@@ -116,74 +116,13 @@ class _JuegoScreenState extends State<JuegoScreen> {
     _cargar();
   }
 
-  void _opciones(Cuchilla c) {
-    final ultima = _ultimas[c.id!];
-    showModalBottomSheet(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text('Cuchilla ${c.numero}',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      fontSize: 24, fontWeight: FontWeight.w600)),
-              if (c.material != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text('Material: ${c.material}',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 16)),
-                ),
-              const SizedBox(height: 20),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.photo_camera, size: 30),
-                label: const Text('Nueva revisión (cámara)'),
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  _nuevaFoto(c);
-                },
-              ),
-              const SizedBox(height: 12),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.photo_library, size: 30),
-                label: const Text('Subir desde galería'),
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  _subirGaleria(c);
-                },
-              ),
-              const SizedBox(height: 12),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.compare, size: 30),
-                label: Text(ultima == null
-                    ? 'Comparar (sin fotos)'
-                    : 'Comparar (${ultima.orden} fotos)'),
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  _comparar(c);
-                },
-              ),
-              const SizedBox(height: 12),
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(88, 52),
-                    textStyle: const TextStyle(fontSize: 18)),
-                icon: const Icon(Icons.edit, size: 26),
-                label: const Text('Editar material'),
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  _editarMaterial(c);
-                },
-              ),
-              const SizedBox(height: 12),
-            ],
-          ),
-        ),
-      ),
+  Widget _accion(IconData icono, String texto, VoidCallback onTap,
+      {Color? color}) {
+    return ListTile(
+      leading: Icon(icono, size: 28, color: color),
+      title: Text(texto, style: TextStyle(fontSize: 18, color: color)),
+      dense: false,
+      onTap: onTap,
     );
   }
 
@@ -191,48 +130,55 @@ class _JuegoScreenState extends State<JuegoScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text(widget.juego.nombre)),
-      body: GridView.count(
-        crossAxisCount: 2,
+      body: ListView(
         padding: const EdgeInsets.all(16),
-        mainAxisSpacing: 16,
-        crossAxisSpacing: 16,
         children: _cuchillas.map((c) {
           final ultima = _ultimas[c.id!];
           return Card(
             clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTap: () => _opciones(c),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                    child: ultima == null
-                        ? Container(
-                            color: Colors.black26,
-                            child: const Icon(Icons.photo_camera_outlined,
-                                size: 48, color: Colors.white38),
-                          )
-                        : Image.file(File(ultima.rutaFoto), fit: BoxFit.cover),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(10),
-                    child: Column(
-                      children: [
-                        Text('Cuchilla ${c.numero}',
-                            style: const TextStyle(
-                                fontSize: 20, fontWeight: FontWeight.w600)),
-                        Text(
-                          ultima == null
-                              ? 'Sin fotos'
-                              : '${ultima.fecha} · Rev. ${ultima.orden}',
-                          style: const TextStyle(
-                              fontSize: 14, color: Colors.white70),
-                        ),
-                      ],
+            margin: const EdgeInsets.only(bottom: 12),
+            child: ExpansionTile(
+              leading: ultima == null
+                  ? Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        color: Colors.black12,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.photo_camera_outlined,
+                          size: 28, color: Colors.black38),
+                    )
+                  : ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.file(File(ultima.rutaFoto),
+                          width: 56, height: 56, fit: BoxFit.cover),
                     ),
-                  ),
-                ],
+              title: Text('Cuchilla ${c.numero}',
+                  style: const TextStyle(
+                      fontSize: 20, fontWeight: FontWeight.w700)),
+              subtitle: Text(
+                ultima == null
+                    ? 'Sin fotos'
+                    : '${ultima.fecha} · Rev. ${ultima.orden}'
+                        '${c.material == null ? '' : ' · ${c.material}'}',
+                style:
+                    const TextStyle(fontSize: 14, color: Colors.black54),
               ),
+              children: [
+                _accion(Icons.photo_camera, 'Nueva revisión (cámara)',
+                    () => _nuevaFoto(c)),
+                _accion(Icons.photo_library, 'Subir desde galería',
+                    () => _subirGaleria(c)),
+                _accion(
+                    Icons.compare,
+                    ultima == null
+                        ? 'Comparar (sin fotos)'
+                        : 'Comparar (${ultima.orden} fotos)',
+                    () => _comparar(c)),
+                _accion(Icons.edit, 'Editar material',
+                    () => _editarMaterial(c)),
+              ],
             ),
           );
         }).toList(),

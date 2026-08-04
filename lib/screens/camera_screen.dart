@@ -1,9 +1,6 @@
-import 'dart:async';
 import 'dart:io';
-import 'dart:math' as math;
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-import 'package:sensors_plus/sensors_plus.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import '../models.dart';
@@ -26,17 +23,11 @@ class _CameraScreenState extends State<CameraScreen> {
   bool _linterna = false;
   bool _capturando = false;
   String? _error;
-  StreamSubscription<AccelerometerEvent>? _accSub;
-  double _angulo = 0; // inclinación en grados; 0 = nivelado
 
   @override
   void initState() {
     super.initState();
     _init();
-    _accSub = accelerometerEventStream().listen((e) {
-      final ang = math.atan2(e.x, e.y) * 180 / math.pi;
-      if (mounted) setState(() => _angulo = ang);
-    });
   }
 
   Future<void> _init() async {
@@ -93,50 +84,8 @@ class _CameraScreenState extends State<CameraScreen> {
     }
   }
 
-  /// Indicador de nivelación: línea que gira con el teléfono.
-  /// Verde cuando está nivelado (±2°).
-  Widget _nivel() {
-    final nivelado = _angulo.abs() < 2;
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              Container(width: 160, height: 1, color: Colors.white30),
-              Transform.rotate(
-                angle: -_angulo * math.pi / 180,
-                child: Container(
-                  width: 140,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: nivelado
-                        ? Colors.greenAccent
-                        : Colors.redAccent.withOpacity(0.9),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            '${_angulo.abs().toStringAsFixed(1)}°',
-            style: TextStyle(
-              color: nivelado ? Colors.greenAccent : Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   void dispose() {
-    _accSub?.cancel();
     _ctrl?.dispose();
     super.dispose();
   }
@@ -206,7 +155,6 @@ class _CameraScreenState extends State<CameraScreen> {
                   IgnorePointer(
                     child: CustomPaint(painter: _Cuadricula()),
                   ),
-                  IgnorePointer(child: _nivel()),
                 ],
               ),
             ),

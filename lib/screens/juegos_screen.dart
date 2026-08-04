@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../db.dart';
 import '../models.dart';
 import 'juego_screen.dart';
-import 'maquinas_screen.dart';
 
 class JuegosScreen extends StatefulWidget {
   const JuegosScreen({super.key});
@@ -144,17 +143,6 @@ class _JuegosScreenState extends State<JuegosScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Juegos de cuchillas'),
-        actions: [
-          IconButton(
-            tooltip: 'Máquinas',
-            iconSize: 30,
-            icon: const Icon(Icons.precision_manufacturing),
-            onPressed: () async {
-              await Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const MaquinasScreen()));
-            },
-          ),
-        ],
       ),
       body: _juegos.isEmpty
           ? const Center(

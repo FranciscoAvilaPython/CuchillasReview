@@ -25,6 +25,7 @@ class _RegistroScreenState extends State<RegistroScreen> {
   int? _maquinaId;
   bool _llapada = false;
   final _materialCtrl = TextEditingController();
+  final _turnosCtrl = TextEditingController();
   bool _guardando = false;
 
   @override
@@ -59,6 +60,7 @@ class _RegistroScreenState extends State<RegistroScreen> {
       fecha: fmtFecha(_fecha),
       llapada: _llapada,
       maquinaId: _maquinaId,
+      turnos: int.tryParse(_turnosCtrl.text.trim()),
     );
     final mat = _materialCtrl.text.trim();
     if (widget.esPrimeraFoto && mat.isNotEmpty) {
@@ -70,7 +72,7 @@ class _RegistroScreenState extends State<RegistroScreen> {
   Widget _titulo(String t) => Padding(
         padding: const EdgeInsets.only(top: 20, bottom: 8),
         child: Text(t,
-            style: const TextStyle(fontSize: 16, color: Colors.white70)),
+            style: const TextStyle(fontSize: 16, color: Colors.black54)),
       );
 
   @override
@@ -135,6 +137,16 @@ class _RegistroScreenState extends State<RegistroScreen> {
                 ),
               ),
             ],
+          ),
+          _titulo('Turnos trabajados'),
+          TextField(
+            controller: _turnosCtrl,
+            keyboardType: TextInputType.number,
+            style: const TextStyle(fontSize: 20),
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              hintText: 'Ej: 6',
+            ),
           ),
           if (widget.esPrimeraFoto) ...[
             _titulo('Material de la cuchilla (solo esta vez)'),

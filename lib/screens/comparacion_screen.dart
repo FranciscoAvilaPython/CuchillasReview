@@ -76,6 +76,7 @@ class _ComparacionScreenState extends State<ComparacionScreen> {
       llapada: r.llapada,
       maquinaId: r.maquinaId,
       orden: r.orden,
+      turnos: r.turnos,
       dx: _dx,
       dy: _dy,
       escala: _escala,
@@ -115,6 +116,8 @@ class _ComparacionScreenState extends State<ComparacionScreen> {
     var fecha = _parseFecha(r.fecha);
     int? maquinaId = r.maquinaId;
     var llapada = r.llapada;
+    final turnosCtrl =
+        TextEditingController(text: r.turnos?.toString() ?? '');
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -166,6 +169,15 @@ class _ComparacionScreenState extends State<ComparacionScreen> {
                   ),
                 ],
               ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: turnosCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Turnos trabajados',
+                  border: OutlineInputBorder(),
+                ),
+              ),
             ],
           ),
           actions: [
@@ -181,7 +193,10 @@ class _ComparacionScreenState extends State<ComparacionScreen> {
     );
     if (ok != true) return;
     await DB.instance.updateRevision(r.id!,
-        fecha: fmtFecha(fecha), llapada: llapada, maquinaId: maquinaId);
+        fecha: fmtFecha(fecha),
+        llapada: llapada,
+        maquinaId: maquinaId,
+        turnos: int.tryParse(turnosCtrl.text.trim()));
     _recargar();
   }
 
@@ -307,7 +322,8 @@ class _ComparacionScreenState extends State<ComparacionScreen> {
                 esReferencia
                     ? 'Rev. 1 (referencia) · ${actual.fecha}'
                     : 'Rev. ${actual.orden} · ${actual.fecha} · $maquina'
-                        ' · Llapada: ${actual.llapada ? 'Sí' : 'No'}',
+                        ' · Llapada: ${actual.llapada ? 'Sí' : 'No'}'
+                        '${actual.turnos == null ? '' : ' · ${actual.turnos} turnos'}',
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: Colors.white, fontSize: 16),
               ),
